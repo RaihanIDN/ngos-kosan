@@ -49,9 +49,40 @@ switch ($action) {
 
     case 'check_session':
         if (!empty($_SESSION['user'])) {
-            sendResponse('success', 'Sesi aktif', $_SESSION['user']);
+            // Refresh data user dari DB agar perubahan role/profil langsung sinkron
+            $stmt = $pdo->prepare("SELECT id, name, email, phone, role, created_at FROM users WHERE id = ?");
+            $stmt->execute([$_SESSION['user']['id']]);
+            $fresh = $stmt->fetch();
+            if ($fresh) {
+                $_SESSION['user'] = $fresh;
+                sendResponse('success', 'Sesi aktif', $fresh);
+            }
         }
         sendResponse('unauthorized', 'Belum login');
+        break;
+
+    case 'update_profile':
+        if ($method !== 'POST') sendResponse('error', 'Metode tidak diizinkan', null, 405);
+        $user  = requireAuth();
+        $name  = trim($body['name'] ?? '');
+        $phone = trim($body['phone'] ?? '');
+        $newPw = trim($body['new_password'] ?? '');
+
+        if (!$name) sendResponse('error', 'Nama lengkap tidak boleh kosong.');
+
+        if ($newPw !== '') {
+            if (strlen($newPw) < 6) sendResponse('error', 'Kata sandi baru minimal 6 karakter.');
+            $hash = password_hash($newPw, PASSWORD_BCRYPT);
+            $pdo->prepare("UPDATE users SET name = ?, phone = ?, password = ? WHERE id = ?")
+                ->execute([$name, $phone, $hash, $user['id']]);
+        } else {
+            $pdo->prepare("UPDATE users SET name = ?, phone = ? WHERE id = ?")
+                ->execute([$name, $phone, $user['id']]);
+        }
+
+        $_SESSION['user']['name']  = $name;
+        $_SESSION['user']['phone'] = $phone;
+        sendResponse('success', 'Profil berhasil diperbarui!', $_SESSION['user']);
         break;
 
     case 'logout':

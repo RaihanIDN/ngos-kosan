@@ -33,11 +33,25 @@ const app = {
         }
     },
 
+    isAdmin() {
+        return this.currentUser && this.currentUser.role === "admin";
+    },
+
     isManager() {
         return this.currentUser && ["admin", "landlord"].includes(this.currentUser.role);
     },
 
-    // --- AUTH ---
+    getInitials(name = "") {
+        return name.split(" ").slice(0, 2).map(w => w[0] || "").join("").toUpperCase() || "U";
+    },
+
+    getRoleLabel(role) {
+        if (role === "admin") return "Admin Web";
+        if (role === "landlord") return "Pemilik Kost";
+        return "Penyewa";
+    },
+
+    // --- AUTH & PROFILE ---
     async checkSession() {
         try {
             const data = await apiRequest("auth.php?action=check_session");
@@ -50,40 +64,100 @@ const app = {
 
     renderNavAuth() {
         const authArea = document.getElementById("navAuthArea");
+        const mobileAvatarArea = document.getElementById("mobileAvatarArea");
         const linkRiwayat = document.getElementById("linkRiwayat");
         const linkLandlord = document.getElementById("linkLandlord");
         const drawerLinks = document.getElementById("mobileDrawerLinks");
 
         if (this.currentUser) {
-            const roleLabel = this.currentUser.role === "admin"
-                ? "Admin Web"
-                : (this.currentUser.role === "landlord" ? "Pemilik Kost" : "Penyewa");
+            const initials = this.getInitials(this.currentUser.name);
+            const roleLabel = this.getRoleLabel(this.currentUser.role);
+            const roleClass = `role-badge-${this.currentUser.role}`;
+
             authArea.innerHTML = `
-                <div style="text-align:right;">
-                    <strong style="display:block;font-size:0.9rem;">${this.currentUser.name}</strong>
-                    <span style="font-size:0.75rem;color:var(--primary);font-weight:700;">${roleLabel}</span>
-                </div>
-                <button class="btn btn-outline" onclick="app.handleLogout()" title="Keluar"><i class="fa-solid fa-right-from-bracket"></i></button>
+                <button class="profile-pill" onclick="app.openProfileModal()" title="Lihat & Edit Profil">
+                    <span class="avatar-circle">${initials}</span>
+                    <span class="profile-pill-info">
+                        <strong>${this.currentUser.name}</strong>
+                        <span class="role-badge ${roleClass}">${roleLabel}</span>
+                    </span>
+                </button>
+                <button class="btn btn-outline" onclick="app.handleLogout()" title="Keluar" style="padding:8px 12px;">
+                    <i class="fa-solid fa-right-from-bracket"></i>
+                </button>
             `;
+
+            if (mobileAvatarArea) {
+                mobileAvatarArea.innerHTML = `
+                    <button class="avatar-circle avatar-mobile-btn" onclick="app.openProfileModal()" title="Profil Saya">
+                        ${initials}
+                    </button>
+                `;
+            }
+
             linkLandlord.style.display = this.isManager() ? "inline-block" : "none";
+            linkLandlord.innerText = this.isAdmin() ? "Panel Admin" : "Dashboard Pemilik";
             linkRiwayat.style.display = this.isManager() ? "none" : "inline-block";
         } else {
             authArea.innerHTML = `<button class="btn btn-outline" onclick="app.openModal('modalAuth')">Masuk / Daftar</button>`;
+            if (mobileAvatarArea) mobileAvatarArea.innerHTML = "";
             linkLandlord.style.display = "none";
             linkRiwayat.style.display = "none";
         }
 
         if (drawerLinks) {
+            const userBanner = this.currentUser ? `
+                <div class="drawer-user-box" onclick="app.openProfileModal(); app.toggleMobileMenu(false)">
+                    <span class="avatar-circle">${this.getInitials(this.currentUser.name)}</span>
+                    <div>
+                        <strong style="display:block;font-size:0.92rem;">${this.currentUser.name}</strong>
+                        <span class="role-badge role-badge-${this.currentUser.role}">${this.getRoleLabel(this.currentUser.role)}</span>
+                    </div>
+                </div>
+            ` : "";
+
             drawerLinks.innerHTML = `
+                ${userBanner}
                 <a href="javascript:void(0)" onclick="app.showHomeView(); app.toggleMobileMenu(false)">Eksplorasi Kost</a>
                 <a href="#features" onclick="app.showHomeView(); app.toggleMobileMenu(false)">Keunggulan</a>
-                ${this.isManager() ? `<a href="javascript:void(0)" onclick="app.showLandlordDashboard(); app.toggleMobileMenu(false)">Dashboard Pengelola</a>` : ""}
+                ${this.currentUser ? `<a href="javascript:void(0)" onclick="app.openProfileModal(); app.toggleMobileMenu(false)">Profil Saya</a>` : ""}
+                ${this.isManager() ? `<a href="javascript:void(0)" onclick="app.showLandlordDashboard(); app.toggleMobileMenu(false)">${this.isAdmin() ? "Panel Admin" : "Dashboard Pemilik"}</a>` : ""}
                 ${this.currentUser && !this.isManager() ? `<a href="javascript:void(0)" onclick="app.showBookingsHistory(); app.toggleMobileMenu(false)">Riwayat Sewa</a>` : ""}
                 ${this.currentUser
                     ? `<button class="btn btn-outline btn-block" onclick="app.handleLogout(); app.toggleMobileMenu(false)">Keluar</button>`
                     : `<button class="btn btn-primary btn-block" onclick="app.openModal('modalAuth'); app.toggleMobileMenu(false)">Masuk / Daftar</button>`
                 }
             `;
+        }
+    },
+
+    openProfileModal() {
+        if (!this.currentUser) return this.openModal("modalAuth");
+        document.getElementById("profileAvatarBig").innerText = this.getInitials(this.currentUser.name);
+        document.getElementById("profileRoleBadge").innerText = this.getRoleLabel(this.currentUser.role);
+        document.getElementById("profileRoleBadge").className = `role-badge role-badge-${this.currentUser.role}`;
+        document.getElementById("profileEmailText").innerText = this.currentUser.email;
+        document.getElementById("profName").value = this.currentUser.name || "";
+        document.getElementById("profPhone").value = this.currentUser.phone || "";
+        document.getElementById("profNewPassword").value = "";
+        this.openModal("modalProfile");
+    },
+
+    async handleUpdateProfile(e) {
+        e.preventDefault();
+        const res = await apiRequest("auth.php?action=update_profile", {
+            method: "POST",
+            body: JSON.stringify({
+                name: document.getElementById("profName").value,
+                phone: document.getElementById("profPhone").value,
+                new_password: document.getElementById("profNewPassword").value
+            })
+        });
+        showToast(res.message, res.status === "success" ? "success" : "error");
+        if (res.status === "success") {
+            this.currentUser = res.data;
+            this.renderNavAuth();
+            this.closeModal("modalProfile");
         }
     },
 
@@ -303,6 +377,15 @@ const app = {
     // --- DASHBOARD ADMIN & PEMILIK ---
     async showLandlordDashboard() {
         this.switchView("landlordView");
+
+        // Bedakan judul & panel khusus Admin
+        const isAdmin = this.isAdmin();
+        document.getElementById("dashboardTitle").innerText = isAdmin ? "Panel Super Admin Website" : "Dashboard Pemilik Kost";
+        document.getElementById("dashboardSubtitle").innerText = isAdmin
+            ? "Verifikasi kost baru, kelola seluruh properti, booking, dan akun pengguna."
+            : "Kelola properti milik Anda, pantau okupansi, dan konfirmasi booking.";
+        document.getElementById("adminUsersCard").style.display = isAdmin ? "block" : "none";
+
         const res = await apiRequest("booking.php?action=dashboard");
         if (res.status !== "success") return showToast(res.message, "error");
 
@@ -314,17 +397,23 @@ const app = {
         document.getElementById("statRevenue").innerText = `Rp ${Number(stats.total_revenue).toLocaleString("id-ID")}`;
 
         const propTable = document.getElementById("landlordKostTable");
-        propTable.innerHTML = kosts.length ? kosts.map(k => `
+        propTable.innerHTML = kosts.length ? kosts.map(k => {
+            const st = k.status || "Approved";
+            const ownerInfo = k.owner_name ? `<br><small style="color:var(--primary)">Pemilik: ${k.owner_name}</small>` : "";
+            return `
             <tr>
-                <td><strong>${k.name}</strong><br><small class="text-muted">${k.city} (${k.type})</small></td>
+                <td><strong>${k.name}</strong><br><small class="text-muted">${k.city} (${k.type})</small>${ownerInfo}</td>
                 <td>Rp ${Number(k.price_monthly).toLocaleString("id-ID")}</td>
                 <td>${k.available_rooms} / ${k.total_rooms} Kamar</td>
-                <td>
+                <td><span class="status-pill status-${st.toLowerCase()}">${st}</span></td>
+                <td style="white-space:nowrap;">
+                    ${isAdmin && st === "Pending" ? `<button class="btn btn-primary" style="padding:4px 10px;font-size:0.8rem;" onclick="app.approveKost(${k.id}, 'Approved')">Setujui</button>` : ""}
                     <button class="btn btn-outline" style="padding:4px 10px;font-size:0.8rem;" onclick="app.openEditKost(${k.id})">Edit</button>
                     <button class="btn btn-outline" style="padding:4px 10px;font-size:0.8rem;border-color:#dc2626;color:#dc2626;" onclick="app.deleteKost(${k.id})">Hapus</button>
                 </td>
             </tr>
-        `).join("") : `<tr><td colspan="4" style="text-align:center;">Belum ada properti.</td></tr>`;
+        `;
+        }).join("") : `<tr><td colspan="5" style="text-align:center;">Belum ada properti.</td></tr>`;
 
         const bookTable = document.getElementById("landlordBookingTableings");
         bookTable.innerHTML = bookings.length ? bookings.map(b => `
@@ -345,6 +434,65 @@ const app = {
                 </td>
             </tr>
         `).join("") : `<tr><td colspan="9" style="text-align:center;">Belum ada pengajuan booking.</td></tr>`;
+
+        if (isAdmin) this.fetchAdminUsers();
+    },
+
+    async approveKost(id, status) {
+        const res = await apiRequest("kost.php?action=approve", {
+            method: "POST",
+            body: JSON.stringify({ id, status })
+        });
+        showToast(res.message, res.status === "success" ? "success" : "error");
+        if (res.status === "success") {
+            this.showLandlordDashboard();
+            this.fetchKosts();
+        }
+    },
+
+    async fetchAdminUsers() {
+        const res = await apiRequest("users.php?action=list");
+        const tbody = document.getElementById("adminUsersTable");
+        if (res.status !== "success" || !tbody) return;
+
+        tbody.innerHTML = res.data.map(u => {
+            const isSelf = this.currentUser && Number(u.id) === Number(this.currentUser.id);
+            return `
+            <tr>
+                <td><strong>${u.name}</strong>${isSelf ? ' <small class="text-muted">(Anda)</small>' : ""}</td>
+                <td>${u.email}</td>
+                <td>${u.phone || "-"}</td>
+                <td>
+                    <select class="role-select" onchange="app.changeUserRole(${u.id}, this.value)" ${isSelf ? "disabled" : ""}>
+                        <option value="tenant" ${u.role === "tenant" ? "selected" : ""}>Penyewa</option>
+                        <option value="landlord" ${u.role === "landlord" ? "selected" : ""}>Pemilik Kost</option>
+                        <option value="admin" ${u.role === "admin" ? "selected" : ""}>Admin Web</option>
+                    </select>
+                </td>
+                <td>
+                    ${isSelf ? `<span class="text-muted">-</span>` : `<button class="btn btn-outline" style="padding:4px 10px;font-size:0.8rem;border-color:#dc2626;color:#dc2626;" onclick="app.deleteUser(${u.id})">Hapus</button>`}
+                </td>
+            </tr>
+            `;
+        }).join("");
+    },
+
+    async changeUserRole(userId, role) {
+        const res = await apiRequest("users.php?action=update_role", {
+            method: "POST",
+            body: JSON.stringify({ user_id: userId, role })
+        });
+        showToast(res.message, res.status === "success" ? "success" : "error");
+    },
+
+    async deleteUser(userId) {
+        if (!confirm("Yakin ingin menghapus akun pengguna ini?")) return;
+        const res = await apiRequest("users.php?action=delete", {
+            method: "POST",
+            body: JSON.stringify({ user_id: userId })
+        });
+        showToast(res.message, res.status === "success" ? "success" : "error");
+        if (res.status === "success") this.fetchAdminUsers();
     },
 
     openAddKost() {

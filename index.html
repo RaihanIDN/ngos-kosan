@@ -31,8 +31,11 @@
                 <button class="btn btn-outline" onclick="app.openModal('modalAuth')">Masuk / Daftar</button>
             </div>
 
-            <div class="mobile-menu-btn" onclick="app.toggleMobileMenu()">
-                <i class="fa-solid fa-bars"></i>
+            <div class="mobile-right-actions">
+                <div id="mobileAvatarArea"></div>
+                <div class="mobile-menu-btn" onclick="app.toggleMobileMenu()">
+                    <i class="fa-solid fa-bars"></i>
+                </div>
             </div>
         </div>
     </header>
@@ -157,8 +160,8 @@
         <section id="landlordView" class="landlord-section" style="display: none;">
             <div class="dashboard-header">
                 <div>
-                    <h2>Dashboard Pengelola Kost</h2>
-                    <p>Kelola properti, pantau okupansi, dan konfirmasi pengajuan sewa.</p>
+                    <h2 id="dashboardTitle">Dashboard Pengelola Kost</h2>
+                    <p id="dashboardSubtitle">Kelola properti, pantau okupansi, dan konfirmasi pengajuan sewa.</p>
                 </div>
                 <button class="btn btn-primary" onclick="app.openAddKost()">
                     <i class="fa-solid fa-plus"></i> Tambah Properti Baru
@@ -198,6 +201,7 @@
                                 <th>Properti</th>
                                 <th>Harga/Bln</th>
                                 <th>Kamar Tersedia</th>
+                                <th>Status</th>
                                 <th>Aksi</th>
                             </tr>
                         </thead>
@@ -224,6 +228,24 @@
                             </tr>
                         </thead>
                         <tbody id="landlordBookingTableings"></tbody>
+                    </table>
+                </div>
+            </div>
+            <!-- PANEL KHUSUS ADMIN: MANAJEMEN PENGGUNA -->
+            <div class="dashboard-card" id="adminUsersCard" style="display: none; margin-top: 25px;">
+                <h3><i class="fa-solid fa-users-gear"></i> Manajemen Pengguna (Khusus Admin)</h3>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>Nama</th>
+                                <th>Email</th>
+                                <th>No. WhatsApp</th>
+                                <th>Hak Akses</th>
+                                <th>Aksi</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminUsersTable"></tbody>
                     </table>
                 </div>
             </div>
@@ -260,7 +282,7 @@
                     <input type="password" id="loginPassword" required placeholder="Minimal 6 karakter">
                 </div>
                 <p class="form-helper-text">
-                    <b>Akun Demo (Pass: password123):</b><br>
+                    <b>Akun Demo (Pass: password):</b><br>
                     Admin Web: <b>admin@example.com</b><br>
                     Pemilik Kost: <b>owner@example.com</b><br>
                     Penyewa: <b>tenant@example.com</b>
@@ -431,6 +453,37 @@
                 </div>
 
                 <button type="submit" class="btn btn-primary btn-block">Simpan Properti</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- MODAL PROFIL PENGGUNA -->
+    <div class="modal-overlay" id="modalProfile">
+        <div class="modal-card">
+            <button class="modal-close" onclick="app.closeModal('modalProfile')">&times;</button>
+            <div class="profile-header-box">
+                <div class="avatar-circle avatar-big" id="profileAvatarBig">U</div>
+                <div>
+                    <span class="role-badge" id="profileRoleBadge">Penyewa</span>
+                    <h3 style="margin-top:4px;">Profil Akun</h3>
+                    <p class="text-muted" id="profileEmailText" style="font-size:0.85rem;"></p>
+                </div>
+            </div>
+
+            <form id="formProfile" onsubmit="app.handleUpdateProfile(event)">
+                <div class="form-group">
+                    <label>Nama Lengkap</label>
+                    <input type="text" id="profName" required>
+                </div>
+                <div class="form-group">
+                    <label>Nomor WhatsApp / HP</label>
+                    <input type="text" id="profPhone" placeholder="08123456789">
+                </div>
+                <div class="form-group">
+                    <label>Kata Sandi Baru <small class="text-muted">(Kosongkan jika tidak ingin ubah)</small></label>
+                    <input type="password" id="profNewPassword" placeholder="Minimal 6 karakter">
+                </div>
+                <button type="submit" class="btn btn-primary btn-block">Simpan Perubahan</button>
             </form>
         </div>
     </div>

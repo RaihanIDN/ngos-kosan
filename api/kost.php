@@ -15,7 +15,8 @@ switch ($action) {
 
         $sql = "SELECT k.*, u.name AS owner_name, u.phone AS owner_phone,
                 (SELECT COUNT(*) FROM favorites f WHERE f.kost_id = k.id AND f.user_id = ?) AS is_favorite
-                FROM kosts k JOIN users u ON k.owner_id = u.id WHERE 1=1";
+                FROM kosts k JOIN users u ON k.owner_id = u.id
+                WHERE k.status = 'Approved'";
         $params = [$userId];
 
         if ($search) {
@@ -62,19 +63,24 @@ switch ($action) {
         $price = (int)($body['price_monthly'] ?? 0);
         if (!$name || !$city || $price <= 0) sendResponse('error', 'Lengkapi nama, kota, dan harga.');
 
-        $rooms = max(1, (int)($body['total_rooms'] ?? 5));
-        $img   = trim($body['image_url'] ?? '') ?: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80';
+        $rooms  = max(1, (int)($body['total_rooms'] ?? 5));
+        $img    = trim($body['image_url'] ?? '') ?: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=800&q=80';
+        $status = ($user['role'] === 'admin') ? 'Approved' : 'Pending';
 
         $stmt = $pdo->prepare("
-            INSERT INTO kosts (owner_id, name, type, city, address, price_monthly, duration_type, bathroom_type, facilities, rules, image_url, total_rooms, available_rooms)
-            VALUES (?, ?, ?, ?, ?, ?, 'Bulanan', ?, ?, ?, ?, ?, ?)
+            INSERT INTO kosts (owner_id, name, type, city, address, price_monthly, duration_type, bathroom_type, facilities, rules, image_url, total_rooms, available_rooms, status)
+            VALUES (?, ?, ?, ?, ?, ?, 'Bulanan', ?, ?, ?, ?, ?, ?, ?)
         ");
         $stmt->execute([
             $user['id'], $name, $body['type'] ?? 'Campur', $city, trim($body['address'] ?? ''),
             $price, $body['bathroom_type'] ?? 'Dalam', json_encode($body['facilities'] ?? []),
-            trim($body['rules'] ?? ''), $img, $rooms, $rooms
+            trim($body['rules'] ?? ''), $img, $rooms, $rooms, $status
         ]);
-        sendResponse('success', 'Properti baru berhasil dipublikasikan.');
+
+        $msg = $status === 'Approved'
+            ? 'Properti baru berhasil dipublikasikan.'
+            : 'Properti dikirim! Menunggu persetujuan Admin agar tampil di katalog.';
+        sendResponse('success', $msg);
         break;
 
     case 'update':
@@ -98,6 +104,16 @@ switch ($action) {
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         sendResponse('success', 'Data properti berhasil diperbarui.');
+        break;
+
+    case 'approve':
+        if ($method !== 'POST') sendResponse('error', 'Metode tidak diizinkan', null, 405);
+        requireAuth(['admin']);
+        $id     = (int)($body['id'] ?? 0);
+        $status = in_array($body['status'] ?? '', ['Approved', 'Pending'], true) ? $body['status'] : 'Approved';
+
+        $pdo->prepare("UPDATE kosts SET status = ? WHERE id = ?")->execute([$status, $id]);
+        sendResponse('success', "Status properti diubah menjadi {$status}.");
         break;
 
     case 'delete':
